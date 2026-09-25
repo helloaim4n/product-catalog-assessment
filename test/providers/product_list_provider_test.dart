@@ -106,4 +106,19 @@ void main() {
     expect(state().error, isNull);
     expect(state().products, hasLength(20));
   });
+
+  test('refreshing while a page is loading does not leave a gap', () async {
+    await notifier().loadMore(); // 40 products
+    fake.holdNextRequest = Completer<void>();
+    final slowPage = fake.holdNextRequest!;
+
+    final pageLoad = notifier().loadMore(); // page 3, held
+    await wait();
+    await notifier().refresh(); // back to page 1
+    slowPage.complete(); // page 3 answers late
+    await pageLoad;
+
+    expect(state().products.map((p) => p.id), List.generate(20, (i) => i + 1));
+    expect(state().isLoadingMore, isFalse);
+  });
 }

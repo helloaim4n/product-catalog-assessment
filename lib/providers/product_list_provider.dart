@@ -58,6 +58,8 @@ class ProductListNotifier extends Notifier<ProductListState> {
 
   Timer? _searchTimer;
 
+  int _listVersion = 0;
+
   ProductApi get _api => ref.read(productApiProvider);
 
   @override
@@ -69,10 +71,12 @@ class ProductListNotifier extends Notifier<ProductListState> {
 
   Future<void> loadFirstPage() async {
     final query = state.query;
+    _listVersion++;
     state = state.copyWith(
       products: [],
       total: 0,
       isLoading: true,
+      isLoadingMore: false,
       clearError: true,
       clearLoadMoreError: true,
     );
@@ -108,6 +112,7 @@ class ProductListNotifier extends Notifier<ProductListState> {
     }
 
     final query = state.query;
+    final version = _listVersion;
     state = state.copyWith(isLoadingMore: true);
 
     try {
@@ -116,17 +121,14 @@ class ProductListNotifier extends Notifier<ProductListState> {
         limit: pageSize,
         query: query,
       );
-      // TODO: if refresh() replaced the list while this page was loading,
-      // this appends page 3 after the new page 1 and products 21–40 go
-      // missing. Ignore pages that belong to an older list.
-      if (!_isStillCurrent(query)) return;
+      if (!_isStillCurrent(query) || version != _listVersion) return;
       state = state.copyWith(
         products: [...state.products, ...page.products],
         total: page.total,
         isLoadingMore: false,
       );
     } catch (error) {
-      if (!_isStillCurrent(query)) return;
+      if (!_isStillCurrent(query) || version != _listVersion) return;
       state = state.copyWith(isLoadingMore: false, loadMoreError: error);
     }
   }
@@ -140,9 +142,11 @@ class ProductListNotifier extends Notifier<ProductListState> {
     final query = state.query;
     final page = await _api.getProducts(skip: 0, limit: pageSize, query: query);
     if (!_isStillCurrent(query)) return;
+    _listVersion++;
     state = state.copyWith(
       products: page.products,
       total: page.total,
+      isLoadingMore: false,
       clearError: true,
       clearLoadMoreError: true,
     );
